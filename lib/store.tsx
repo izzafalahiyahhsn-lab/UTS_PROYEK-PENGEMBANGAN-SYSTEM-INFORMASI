@@ -47,10 +47,38 @@ export const useStore = () => {
 
 const empty: DB = { users: [], destinations: [], tariffs: [], sales: [], tickets: [], validations: [], reconciliations: [], audit_logs: [], settings: [] };
 
+function isValidDB(candidate: unknown): candidate is DB {
+  if (!candidate || typeof candidate !== "object") return false;
+  const c = candidate as Record<string, unknown>;
+  return (
+    Array.isArray(c.users) &&
+    Array.isArray(c.destinations) &&
+    Array.isArray(c.tariffs) &&
+    Array.isArray(c.sales) &&
+    Array.isArray(c.tickets) &&
+    Array.isArray(c.validations) &&
+    Array.isArray(c.reconciliations) &&
+    Array.isArray(c.audit_logs) &&
+    c.destinations.length > 0 &&
+    c.users.length > 0
+  );
+}
+
 async function signAll(tickets: Ticket[]) {
-  const res = await fetch("/api/tickets/sign", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tickets }) });
-  const { signatures } = await res.json();
-  tickets.forEach((t, i) => (t.signature = signatures[i]));
+  try {
+    const res = await fetch("/api/tickets/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tickets }),
+    });
+    if (!res.ok) return;
+    const { signatures } = await res.json();
+    if (Array.isArray(signatures)) {
+      tickets.forEach((t, i) => (t.signature = signatures[i] ?? t.signature));
+    }
+  } catch {
+    // fallback offline
+  }
 }
 
 /** BR-02: tiket lewat tanggal berlaku -> KEDALUWARSA */
@@ -58,7 +86,10 @@ function expire(db: DB): Ticket[] {
   const today = isoDate();
   const changed: Ticket[] = [];
   db.tickets.forEach((t) => {
-    if (t.status === "BELUM_DIGUNAKAN" && t.valid_date < today) { t.status = "KEDALUWARSA"; changed.push(t); }
+    if (t.status === "BELUM_DIGUNAKAN" && t.valid_date < today) {
+      t.status = "KEDALUWARSA";
+      changed.push(t);
+    }
   });
   return changed;
 }
@@ -85,24 +116,32 @@ async function buildAuditChain(db: DB) {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [db, setDb] = useState<DB>(empty);
   const [ready, setReady] = useState(false);
+  const [remoteActive, setRemoteActive] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const dbRef = useRef<DB>(empty);
-  const mode: Ctx["mode"] = supabase ? "supabase" : "demo";
+  const remoteRef = useRef(false);
+  const mode: Ctx["mode"] = remoteActive ? "supabase" : "demo";
 
   const commit = useCallback((next: DB) => {
     dbRef.current = next;
     setDb(next);
-    if (!supabase) {
-      try { localStorage.setItem(LS_DB, JSON.stringify(next)); } catch { /* kuota penuh */ }
+    try {
+      localStorage.setItem(LS_DB, JSON.stringify(next));
+    } catch {
+      /* kuota penuh */
     }
   }, []);
 
   const persist = useCallback(async (table: Table, rows: object[]) => {
-    if (!supabase || rows.length === 0) return;
+    if (!supabase || !remoteRef.current || rows.length === 0) return;
     for (let i = 0; i < rows.length; i += 500) {
       const { error } = await supabase.from(table).upsert(rows.slice(i, i + 500), { onConflict: KEY[table] });
-      if (error) console.error(`Supabase ${table}:`, error.message);
+      if (error) {
+        remoteRef.current = false;
+        setRemoteActive(false);
+        break;
+      }
     }
   }, []);
 
@@ -112,32 +151,64 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   }, []);
 
-  // Inisialisasi data
+  // Inisialisasi data dengan proteksi anti-korupsi localStorage & fallback Supabase otomatis
   useEffect(() => {
     (async () => {
       let data: DB | null = null;
       if (supabase) {
-        const tables = Object.keys(KEY) as Table[];
-        const results = await Promise.all(tables.map((t) => supabase!.from(t).select("*").limit(20000)));
-        if (results.every((r) => !r.error) && (results[1].data?.length ?? 0) > 0) {
-          data = { ...empty };
-          tables.forEach((t, i) => ((data as unknown as Record<string, unknown[]>)[t] = results[i].data ?? []));
-          data.audit_logs.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        try {
+          const tables = Object.keys(KEY) as Table[];
+          const results = await Promise.all(tables.map((t) => supabase!.from(t).select("*").limit(20000)));
+          if (results.every((r) => !r.error)) {
+            remoteRef.current = true;
+            setRemoteActive(true);
+            if ((results[1].data?.length ?? 0) > 0) {
+              data = { ...empty };
+              tables.forEach((t, i) => ((data as unknown as Record<string, unknown[]>)[t] = results[i].data ?? []));
+              data.audit_logs.sort((a, b) => b.created_at.localeCompare(a.created_at));
+            }
+          }
+        } catch {
+          remoteRef.current = false;
+          setRemoteActive(false);
         }
-      } else {
-        const raw = localStorage.getItem(LS_DB);
-        if (raw) data = JSON.parse(raw);
+      }
+      if (!data) {
+        try {
+          const raw = localStorage.getItem(LS_DB);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (isValidDB(parsed)) {
+              data = parsed;
+            } else {
+              localStorage.removeItem(LS_DB);
+            }
+          }
+        } catch {
+          // Pulihkan otomatis bila JSON di localStorage rusak/korup
+          localStorage.removeItem(LS_DB);
+          data = null;
+        }
       }
       if (!data) {
         data = buildSeed();
         await signAll(data.tickets);
         await buildAuditChain(data);
-        if (supabase) for (const t of Object.keys(KEY) as Table[]) await persist(t, data[t] as object[]);
+        if (remoteRef.current) {
+          for (const t of Object.keys(KEY) as Table[]) await persist(t, data[t] as object[]);
+        }
+      } else if (data.tickets.some((t) => !t.signature)) {
+        await signAll(data.tickets);
       }
       const expired = expire(data);
       if (expired.length) persist("tickets", expired);
       commit(data);
-      setUserId(localStorage.getItem(LS_USER));
+      const savedUser = localStorage.getItem(LS_USER);
+      if (savedUser && data.users.some((u) => u.id === savedUser && u.active)) {
+        setUserId(savedUser);
+      } else {
+        setUserId(null);
+      }
       setReady(true);
     })();
   }, [commit, persist]);
@@ -170,6 +241,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const saveDestination: Ctx["saveDestination"] = async (d, isNew) => {
     const cur = dbRef.current;
+    if (!d.code.trim() || !d.name.trim() || !d.kecamatan.trim()) {
+      throw new Error("Kode unik, nama destinasi, dan kecamatan wajib diisi");
+    }
+    if (d.target_bulanan < 0 || d.target_apbd < 0) {
+      throw new Error("Target pendapatan tidak boleh bernilai negatif");
+    }
     if (isNew && cur.destinations.some((x) => x.code === d.code)) throw new Error("Kode destinasi sudah dipakai");
     const list = isNew ? [...cur.destinations, d] : cur.destinations.map((x) => (x.id === d.id ? d : x));
     commit({ ...cur, destinations: list });
@@ -179,6 +256,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   /** FR-007: tarif baru = versi baru, tarif lama ditutup (tidak ditimpa) */
   const saveTariff: Ctx["saveTariff"] = async (t) => {
+    if (!t.name.trim() || !Number.isFinite(t.amount) || t.amount <= 0 || !t.sk_number.trim()) {
+      throw new Error("Nama tiket, nominal tarif (> Rp 0), dan nomor SK/Perda wajib valid");
+    }
     const cur = dbRef.current;
     const dayBefore = new Date(t.effective_from + "T00:00:00");
     dayBefore.setDate(dayBefore.getDate() - 1);
@@ -191,10 +271,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       return x;
     });
-    const nt: Tariff = { ...t, id: uid("TRF"), active: true, effective_until: null };
+    const nt: Tariff = { ...t, amount: Math.round(t.amount), id: uid("TRF"), active: true, effective_until: null };
     commit({ ...cur, tariffs: [...tariffs, nt] });
     await persist("tariffs", [...closed, nt]);
-    await audit("TARIF_UPDATE", "Master Tiket", `Tarif ${t.name} ${rp(t.amount)}/${t.unit} berlaku ${t.effective_from} (${t.sk_number})${closed.length ? `; versi lama ${rp(closed[0].amount)} dinonaktifkan` : ""}`);
+    await audit("TARIF_UPDATE", "Master Tiket", `Tarif ${t.name} ${rp(nt.amount)}/${t.unit} berlaku ${t.effective_from} (${t.sk_number})${closed.length ? `; versi lama ${rp(closed[0].amount)} dinonaktifkan` : ""}`);
   };
 
   const toggleTariff: Ctx["toggleTariff"] = async (id) => {
@@ -214,11 +294,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const items: SaleItem[] = input.items.filter((i) => i.qty > 0).map((i) => {
       const t = cur.tariffs.find((x) => x.id === i.tariff_id && x.active && x.destination_id === input.destination_id);
       if (!t) throw new Error(`Tarif ${i.name} tidak aktif`);
-      return { tariff_id: t.id, name: t.name, price: t.amount, qty: i.qty, subtotal: t.amount * i.qty };
+      const q = Math.max(1, Math.floor(i.qty));
+      return { tariff_id: t.id, name: t.name, price: t.amount, qty: q, subtotal: t.amount * q };
     });
     if (items.length === 0) throw new Error("Keranjang kosong");
     const subtotal = items.reduce((a, b) => a + b.subtotal, 0);
-    const discount = Math.min(Math.max(0, Math.round(input.discount)), subtotal);
+    const discount = Math.min(Math.max(0, Math.round(input.discount || 0)), subtotal);
     const total = subtotal - discount;
     if (input.method === "TUNAI" && input.cash_received < total) throw new Error("Uang diterima kurang dari total");
     const today = isoDate().replace(/-/g, "");
@@ -265,7 +346,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     let ticket = dbRef.current.tickets.find((t) => t.code === code);
-    if (supabase) {
+    if (supabase && remoteRef.current) {
       const { data } = await supabase.from("tickets").select("*").eq("code", code).maybeSingle();
       if (data) ticket = data as Ticket;
     }
@@ -287,8 +368,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (ticket.valid_date > today) return reject("BELUM BERLAKU", `Tiket berlaku mulai ${ticket.valid_date.split("-").reverse().join("/")}`, ticket);
 
     const used_at = new Date().toISOString();
-    if (supabase) {
-      // BR-03: UPDATE bersyarat atomik - hanya satu pemindaian yang menang
+    if (supabase && remoteRef.current) {
       const { data } = await supabase.from("tickets").update({ status: "SUDAH_DIGUNAKAN", used_at, used_by: u.name })
         .eq("code", ticket.code).eq("status", "BELUM_DIGUNAKAN").select();
       if (!data || data.length === 0) return reject("SUDAH DIGUNAKAN", "Tiket baru saja divalidasi di gerbang lain", ticket);
@@ -303,14 +383,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const saveReconciliation: Ctx["saveReconciliation"] = async (r) => {
     const cur = dbRef.current;
     const system_amount = cur.sales.filter((s) => s.destination_id === r.destination_id && isoDate(new Date(s.created_at)) === r.date).reduce((a, b) => a + b.total, 0);
-    const status = r.deposit_amount === null ? "MENUNGGU_VERIFIKASI" : r.deposit_amount === system_amount ? "SESUAI" : "TERDAPAT_SELISIH";
+    const dep = r.deposit_amount === null ? null : Math.max(0, Math.round(r.deposit_amount));
+    const status = dep === null ? "MENUNGGU_VERIFIKASI" : dep === system_amount ? "SESUAI" : "TERDAPAT_SELISIH";
     if (status === "TERDAPAT_SELISIH" && !r.notes.trim()) throw new Error("Selisih tidak nol wajib diberi catatan tindak lanjut (BR-08)");
     const id = `REC-${r.date}-${r.destination_id}`;
-    const rec: Reconciliation = { id, date: r.date, destination_id: r.destination_id, system_amount, deposit_amount: r.deposit_amount, bank_ref: r.bank_ref, status, notes: r.notes };
+    const rec: Reconciliation = { id, date: r.date, destination_id: r.destination_id, system_amount, deposit_amount: dep, bank_ref: r.bank_ref, status, notes: r.notes };
     const exists = cur.reconciliations.some((x) => x.id === id);
     commit({ ...cur, reconciliations: exists ? cur.reconciliations.map((x) => (x.id === id ? rec : x)) : [...cur.reconciliations, rec] });
     await persist("reconciliations", [rec]);
-    await audit("REKONSILIASI", "Rekonsiliasi PAD", `${r.destination_id} ${r.date}: sistem ${rp(system_amount)} vs setoran ${r.deposit_amount === null ? "-" : rp(r.deposit_amount)} -> ${status}`);
+    await audit("REKONSILIASI", "Rekonsiliasi PAD", `${r.destination_id} ${r.date}: sistem ${rp(system_amount)} vs setoran ${dep === null ? "-" : rp(dep)} -> ${status}`);
     return rec;
   };
 
@@ -339,4 +420,3 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     </StoreCtx.Provider>
   );
 }
-

@@ -11,10 +11,12 @@ export const ROLE_LABEL: Record<RoleId, string> = {
 export type Module = "dashboard" | "destinasi" | "transaksi" | "validasi" | "laporan" | "audit" | "pengaturan";
 
 // Matriks hak akses (PRD Bagian 8)
+// Admin Sistem & Admin Dinas memiliki akses Lihat (R) pada log transaksi untuk audit silang,
+// namun eksekusi penjualan POS (X) tetap dikunci hanya untuk Petugas Loket.
 export const ACCESS: Record<Module, RoleId[]> = {
   dashboard: ["ADMIN_SISTEM", "ADMIN_DINAS", "PENGELOLA"],
   destinasi: ["ADMIN_SISTEM", "ADMIN_DINAS", "PENGELOLA", "PETUGAS_LOKET"],
-  transaksi: ["PENGELOLA", "PETUGAS_LOKET"],
+  transaksi: ["ADMIN_SISTEM", "ADMIN_DINAS", "PENGELOLA", "PETUGAS_LOKET"],
   validasi: ["ADMIN_SISTEM", "ADMIN_DINAS", "PENGELOLA", "PETUGAS_VALIDASI"],
   laporan: ["ADMIN_SISTEM", "ADMIN_DINAS", "PENGELOLA"],
   audit: ["ADMIN_SISTEM", "ADMIN_DINAS"],
@@ -40,4 +42,3 @@ export const NAV: { href: string; label: string; module: Module; icon: string }[
   { href: "/audit", label: "Audit Log", module: "audit", icon: "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4" },
   { href: "/pengaturan", label: "Pengaturan Sistem", module: "pengaturan", icon: "M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4" },
 ];
-
