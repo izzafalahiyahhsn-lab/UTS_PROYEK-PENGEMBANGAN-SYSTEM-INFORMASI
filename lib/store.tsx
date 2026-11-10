@@ -6,7 +6,7 @@ import { supabase } from "./supabase";
 import { isoDate, rp, sha256Hex, uid } from "./format";
 import { ROLE_LABEL } from "./rbac";
 
-const LS_DB = "ltr-db-v1";
+const LS_DB = "ltr-db-v2";
 const LS_USER = "ltr-user";
 const GENESIS = "0".repeat(64);
 type Table = keyof DB;
