@@ -1,0 +1,18 @@
+[package]
+name = "lamsel-tourism-rust-core"
+version = "1.0.0"
+edition = "2021"
+authors = ["Izzatul Falahiyah Hasan", "Dr. Erliyan Redy Susanto, M.Kom"]
+description = "Modul inti kriptografi HMAC-SHA256, rantai hash audit log, dan aturan bisnis rekonsiliasi PAD Lamsel Tourism Revenue (PRD Bagian 7 & 14)"
+
+[lib]
+name = "lamsel_rust_core"
+path = "src/lib.rs"
+
+[dependencies]
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+

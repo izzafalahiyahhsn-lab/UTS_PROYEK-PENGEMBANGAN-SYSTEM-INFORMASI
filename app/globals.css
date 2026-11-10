@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: #f5f7fa;
+}
+.tabular-nums,
+td,
+.metric {
+  font-variant-numeric: tabular-nums;
+}
+.metric {
+  font-family: var(--font-jakarta), sans-serif;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #16324f;
+}
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+@media print {
+  body.print-ticket * { visibility: hidden; }
+  body.print-ticket #eticket, body.print-ticket #eticket * { visibility: visible; }
+  body.print-ticket #eticket { position: absolute; left: 0; top: 0; width: 100%; border: 0; }
+}
+
