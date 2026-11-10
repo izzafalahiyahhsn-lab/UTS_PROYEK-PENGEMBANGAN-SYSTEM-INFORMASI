@@ -142,8 +142,8 @@ export function buildSeed(): DB {
       { key: "RKUD", label: "Rekening Kas Umum Daerah (RKUD)", value: "381.00.01.00291.8 - Bank Lampung" },
       { key: "CUTOFF", label: "Cut-off Rekonsiliasi Harian", value: "15:00 WIB" },
       { key: "SYNC", label: "Interval Sinkronisasi POS & Gerbang", value: "30 detik" },
-      { key: "PERDA", label: "Dasar Hukum Tarif", value: "Perda Kab. Lampung Selatan No. 04/2024 (contoh, perlu validasi)" },
-      { key: "DEMO", label: "Mode Demo / Role Switcher (FR-002)", value: "AKTIF (wajib nonaktif di produksi)" },
+      { key: "PERDA", label: "Dasar Hukum Tarif Retribusi", value: "Perda Kab. Lampung Selatan No. 04/2024" },
+      { key: "SWITCHER", label: "Peralihan Peran Cepat (Multi-Role)", value: "AKTIF" },
     ],
   };
 }

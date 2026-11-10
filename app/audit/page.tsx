@@ -33,8 +33,8 @@ export default function AuditPage() {
       <PageHeader crumb="Audit Log" title="Jejak Audit Aktivitas Sistem (Append-Only)"
         desc="Log hanya dapat ditambah. Di basis data, trigger menolak UPDATE/DELETE; setiap entri terhubung hash SHA-256 berantai sehingga perubahan terdeteksi."
         actions={<>
-          <Btn variant="teal" onClick={verify}>🛡 Verifikasi Rantai Hash</Btn>
-          <Btn variant="outline" onClick={() => downloadCsv("audit-log.csv", ["Waktu", "User", "Peran", "Tipe", "Modul", "Status", "Deskripsi", "Hash"], list.map((l) => [`${fmtDate(l.created_at)} ${fmtTime(l.created_at, true)}`, l.user_name, l.role, l.type, l.module, l.status, l.description, l.hash]))}>⬇ CSV</Btn>
+          <Btn variant="teal" onClick={verify}>Verifikasi Rantai Hash</Btn>
+          <Btn variant="outline" onClick={() => downloadCsv("audit-log.csv", ["Waktu", "User", "Peran", "Tipe", "Modul", "Status", "Deskripsi", "Hash"], list.map((l) => [`${fmtDate(l.created_at)} ${fmtTime(l.created_at, true)}`, l.user_name, l.role, l.type, l.module, l.status, l.description, l.hash]))}>Unduh CSV</Btn>
         </>} />
       {chain && <div className={`mb-4 rounded-card border p-4 text-sm font-semibold ${chain.startsWith("UTUH") ? "border-[#BBF7D0] bg-[#DCFCE7] text-[#166534]" : "border-[#FECACA] bg-[#FEE2E2] text-[#991B1B]"}`}>Status rantai: {chain}</div>}
       <Card className="mb-6 p-4">
@@ -47,7 +47,7 @@ export default function AuditPage() {
       <Card className="overflow-hidden">
         <div className="max-h-[640px] overflow-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0"><tr><Th>Waktu</Th><Th>User &amp; Peran</Th><Th>Tipe</Th><Th>Modul</Th><Th>Status</Th><Th>Deskripsi</Th><Th>Hash</Th></tr></thead>
+            <thead className="sticky top-0 z-10 bg-navy"><tr><Th>Waktu</Th><Th>User &amp; Peran</Th><Th>Tipe</Th><Th>Modul</Th><Th>Status</Th><Th>Deskripsi</Th><Th>Hash</Th></tr></thead>
             <tbody>
               {list.map((l) => (
                 <tr key={l.id} className="hover:bg-slate-50">

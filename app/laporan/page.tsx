@@ -81,16 +81,16 @@ export default function LaporanPage() {
       <PageHeader crumb="Laporan & Rekonsiliasi" title="Laporan Akuntabilitas PAD Pariwisata & Rekonsiliasi Kas Daerah Bank Lampung"
         desc="Audit integritas aliran dana dan retribusi elektronik: nilai sistem dibandingkan setoran nyata (RKUD) dengan status otomatis BR-08."
         actions={<>
-          <Btn variant="teal" onClick={() => window.print()}>🖨 Cetak Berita Acara (BAR)</Btn>
-          {can.exportCsv(role) && <Btn variant="outline" onClick={exportCsv}>⬇ Ekspor CSV</Btn>}
+          <Btn variant="teal" onClick={() => window.print()}>Cetak Berita Acara (BAR)</Btn>
+          {can.exportCsv(role) && <Btn variant="outline" onClick={exportCsv}>Ekspor CSV</Btn>}
         </>} />
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-card bg-navy p-5 text-white shadow-card">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-ctl bg-white/10 text-xl">🏛</span>
+          <span className="flex h-11 w-11 items-center justify-center rounded-ctl bg-white/10 font-head text-sm font-bold text-[#9cf2e8]">RKUD</span>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-[#9cf2e8]">Buku Kas Harian RKUD <Badge tone="sukses">Siap Ditutup Buku</Badge></p>
-            <p className="font-head text-lg font-semibold">Sesi Rekonsiliasi {fmtDate(from)} - {fmtDate(to)} · Cut-off {db.settings.find((s) => s.key === "CUTOFF")?.value}</p>
+            <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[#9cf2e8]">Buku Kas Harian RKUD <Badge tone="sukses">Siap Ditutup Buku</Badge></p>
+            <p className="mt-0.5 font-head text-lg font-semibold">Sesi Rekonsiliasi {fmtDate(from)} – {fmtDate(to)} · Cut-off {db.settings.find((s) => s.key === "CUTOFF")?.value}</p>
           </div>
         </div>
         <p className="text-right text-xs text-slate-300">Kanal terverifikasi<br /><b className="text-[#9cf2e8]">QRIS Dinamis · Tunai Loket · Virtual Account</b></p>
